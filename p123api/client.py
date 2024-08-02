@@ -2,6 +2,7 @@ from collections import defaultdict
 import requests
 import time
 import pandas
+import numpy as np
 from string import Template
 
 
@@ -396,7 +397,7 @@ class Client(object):
             if params.get("asOfDt"):
                 for formula_idx in f_indices:
                     name = (
-                        names[formula_idx]
+                        names[formula_idx] 
                         if names is not None
                         else f"formula{formula_idx + 1}"
                     )
@@ -404,35 +405,36 @@ class Client(object):
                 del ret["dt"], ret["cost"], ret["quotaRemaining"], ret["data"]
                 ret = pandas.DataFrame(ret)
             else:
-                data = {"dates": [], "p123Uids": [], "tickers": []}
-                includeNames = False
+                d = ret["dates"]
+                data = {
+                    "dates": np.concatenate(
+                        [np.full(len(dtObj["p123Uids"]), dtObj["dt"]) for dtObj in d],
+                        dtype=np.str_,
+                    ),
+                    "p123Uids": np.concatenate(
+                        [dtObj["p123Uids"] for dtObj in d], dtype=np.int32
+                    ),
+                    "tickers": np.concatenate(
+                        [dtObj["tickers"] for dtObj in d], dtype=np.str_
+                    ),
+                }
                 if params.get("includeNames"):
-                    data["names"] = []
-                    includeNames = True
-                includeFigi = False
-                if params.get("figi"):
-                    data["figi"] = []
-                    includeFigi = True
-                formulas = defaultdict(list)
-                for dtObj in ret["dates"]:
-                    data["dates"].extend(
-                        dtObj["dt"] for _ in range(len(dtObj["p123Uids"]))
+                    data["names"] = np.concatenate(
+                        [dtObj["names"] for dtObj in d], dtype=np.str_
                     )
-                    data["p123Uids"].extend(dtObj["p123Uids"])
-                    data["tickers"].extend(dtObj["tickers"])
-                    if includeNames:
-                        data["names"].extend(dtObj["names"])
-                    if includeFigi:
-                        data["figi"].extend(dtObj["figi"])
-                    for formula_idx in f_indices:
-                        formulas[formula_idx].extend(dtObj["data"][formula_idx])
+                if params.get("figi"):
+                    data["figi"] = np.concatenate(
+                        [dtObj["figi"] for dtObj in d], dtype=np.str_
+                    )
                 for formula_idx in f_indices:
                     name = (
                         names[formula_idx]
                         if names is not None
                         else f"formula{formula_idx + 1}"
                     )
-                    data[name] = formulas[formula_idx]
+                    data[name] = np.concatenate(
+                        [dtObj["data"][formula_idx] for dtObj in d], dtype=np.float64
+                    )
                 ret = pandas.DataFrame(data)
             ret.attrs["raw_obj"] = raw_obj
 
